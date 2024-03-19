@@ -1,0 +1,134 @@
+SELECT * FROM get_employees() ORDER BY eno;
+UPDATE employee SET manager = NULL;
+
+
+1.) 1. Generate a unique employee that follows the following format:
+year_hired-series_number
+For example: If employee A was hired on January 12, 2024, her expected id number must start with 2024-0004
+
+-- STEP 1: Create tables
+-- Create Employee table
+CREATE TABLE Employee (
+    eno VARCHAR(10) PRIMARY KEY,
+    name VARCHAR(50),
+    manager VARCHAR(10) REFERENCES Employee(eno)
+);
+
+-- Create Payslip table
+CREATE TABLE Payslip (
+    pno SERIAL PRIMARY KEY,
+    eno VARCHAR(10) REFERENCES Employee(eno),
+    salary DECIMAL(10, 2),
+    date_generated TIMESTAMP
+);
+
+-- STEP 2: Create sequence series_number_seq
+CREATE SEQUENCE series_number_seq
+    START WITH 1111 (ilahi ninyo ang increment)
+    INCREMENT BY 1;
+
+-- Step 3: Create a function to generate employee ID
+CREATE OR REPLACE FUNCTION generate_employee_id(year_hired INT)
+RETURNS VARCHAR(20) AS $$
+DECLARE
+    series_num INT;
+BEGIN
+    -- Check if the given year exists in the table
+    IF EXISTS (SELECT 1 FROM public.employee WHERE LEFT(eno, 4)::INT = year_hired) THEN
+        -- If year exists, increment the series number
+        series_num := NEXTVAL('series_number_seq');
+    ELSE
+        -- If year does not exist, reset series number
+        ALTER SEQUENCE series_number_seq RESTART WITH 1111;
+        series_num := NEXTVAL('series_number_seq');
+    END IF;
+    
+    RETURN CONCAT(year_hired, '-', LPAD(series_num::TEXT, 4, '0'));
+END;
+$$ LANGUAGE plpgsql;
+
+-- STEP 3: Insert employees using the function
+INSERT INTO public.employee (eno, name)
+VALUES (generate_employee_id(2020), 'Esther'),
+       (generate_employee_id(2020), 'Marisol'),
+       (generate_employee_id(2020), 'Ezra'),
+       (generate_employee_id(2021), 'Krysel'),
+       (generate_employee_id(2021), 'Charlene'),
+       (generate_employee_id(2021), 'Therese'),
+       (generate_employee_id(2022), 'Avah'),
+       (generate_employee_id(2022), 'Elen'),
+       (generate_employee_id(2022), 'Lenielyn'),
+       (generate_employee_id(2022), 'Ian'),
+       (generate_employee_id(2023), 'Francen'),
+       (generate_employee_id(2023), 'Ivan'),
+       (generate_employee_id(2023), 'Angel'),
+       (generate_employee_id(2024), 'Ella'),
+       (generate_employee_id(2024), 'Cielo'),
+       (generate_employee_id(2024), 'Chembee'),
+       (generate_employee_id(2024), 'Jed'),
+       (generate_employee_id(2025), 'Dessy'),
+       (generate_employee_id(2025), 'Hanni'),
+       (generate_employee_id(2025), 'Gerald');
+
+
+2.) 2. Write a procedure that updates the manager of an employee.
+Take note that each manager must handle at least 5employees but should not exceed 15employees.
+In case the number of employees that will be assigned to a manager exceeds the maximum, a notification will be raise by the procedure. 
+
+-- STEP 4: Create a procedure that updates the manager of an employee
+CREATE OR REPLACE PROCEDURE update_manager(employee_id VARCHAR(10), new_manager_id VARCHAR(10)) AS $$
+DECLARE 
+    manager_count INT;
+BEGIN
+    -- Check if the employee exists
+    IF NOT EXISTS (SELECT 1 FROM Employee WHERE eno = employee_id) THEN
+        RAISE NOTICE 'Employee % does not exist.', employee_id;
+        RETURN;
+    END IF;
+
+    -- Check if the new manager exists
+    IF NOT EXISTS (SELECT 1 FROM Employee WHERE eno = new_manager_id) THEN
+        RAISE NOTICE 'Manager % does not exist.', new_manager_id;
+        RETURN;
+    END IF;
+
+    -- Count the number of employees assigned to the new manager
+    SELECT COUNT(*) INTO manager_count
+    FROM Employee
+    WHERE manager = new_manager_id;
+
+    -- Check if the new manager has less than 5 employees assigned
+    IF manager_count < 5 THEN
+        RAISE NOTICE 'Each manager must be assigned to at least 5 employees.';
+    ELSIF manager_count >= 15 THEN
+        RAISE NOTICE 'Maximum number of 15 employees has been reached.';
+        RETURN;
+    END IF;
+
+    -- Update the manager of the employee
+    UPDATE Employee
+    SET manager = COALESCE(new_manager_id, '')
+    WHERE eno = employee_id;
+
+END;
+$$ LANGUAGE plpgsql;
+
+-- STEP 5: Input 15 values to manager column using the eno
+CALL update_manager('2025-1111', '2024-1111');
+CALL update_manager('2025-1112', '2024-1111');
+CALL update_manager('2025-1113', '2024-1111');
+CALL update_manager('2024-1111', '2024-1111');
+CALL update_manager('2024-1112', '2024-1111');
+CALL update_manager('2024-1113', '2024-1111');
+CALL update_manager('2024-1114', '2024-1111');
+CALL update_manager('2020-1111', '2024-1111');
+CALL update_manager('2020-1112', '2024-1111');
+CALL update_manager('2020-1113', '2024-1111');
+CALL update_manager('2022-1111', '2024-1111');
+CALL update_manager('2022-1112', '2024-1111');
+CALL update_manager('2022-1113', '2024-1111');
+CALL update_manager('2022-1114', '2024-1111');
+CALL update_manager('2023-1111', '2024-1111');
+
+-- STEP 6: Add 1 more to see if it will not let you the 16th manager id
+CALL update_manager('2023-1112', '2024-1111');
